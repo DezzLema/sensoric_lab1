@@ -8,63 +8,77 @@
 #define LED_PIN GPIO_NUM_2
 #define BUTTON_PIN GPIO_NUM_5
 #define BUTTON_PRESSED 0
-#define DEBOUNCE_DELAY_MS 25
+#define DEBOUNCE_DELAY_MS 50
 
-static volatile uint32_t lastButtonChangeTime = 0;
-static uint8_t ledState = 0;  // Используем uint8_t вместо bool для чистого C
+static volatile uint8_t ledState = 0;
+static QueueHandle_t gpio_evt_queue = NULL;
 
-// Простой обработчик прерывания - только запоминаем время изменения
+// Безопасный обработчик прерывания
 static void IRAM_ATTR button_isr_handler(void* arg) {
-    lastButtonChangeTime = xTaskGetTickCountFromISR();
-}
-
-// Задача для опроса состояния кнопки
-static void buttonPollTask(void* args) {
-    uint8_t lastStableState = !BUTTON_PRESSED;  // uint8_t вместо bool
-    uint32_t lastProcessedTime = 0;
-    uint32_t currentTime = 0;
-    uint8_t currentState = 0;
+    static uint32_t last_interrupt_time = 0;
+    static uint8_t last_button_state = !BUTTON_PRESSED;
     
-    while (1) {  // true -> 1 для чистого C
-        currentTime = xTaskGetTickCount();
+    uint32_t current_time = xTaskGetTickCountFromISR();
+    
+    // Защита от дребезга
+    if ((current_time - last_interrupt_time) > pdMS_TO_TICKS(DEBOUNCE_DELAY_MS)) {
+        // Читаем состояние кнопки (разрешено)
+        uint8_t current_button_state = gpio_get_level(BUTTON_PIN);
         
-        // Если было изменение состояния и прошло достаточно времени
-        if (lastButtonChangeTime > lastProcessedTime && 
-            (currentTime - lastButtonChangeTime) > pdMS_TO_TICKS(DEBOUNCE_DELAY_MS)) {
-            
-            currentState = gpio_get_level(BUTTON_PIN);
-            
-            // Обрабатываем только нажатие (переход от отжатого к нажатому)
-            if (currentState == BUTTON_PRESSED && lastStableState != BUTTON_PRESSED) {
-                ledState = !ledState;
-                gpio_set_level(LED_PIN, ledState);
-                ESP_LOGI("Button", "LED toggled: %s", ledState ? "ON" : "OFF");
+        // Обрабатываем только ИЗМЕНЕНИЕ состояния
+        if (current_button_state != last_button_state) {
+            // Если это нажатие (переход от отжатого к нажатому)
+            if (current_button_state == BUTTON_PRESSED) {
+                // Отправляем событие в очередь (безопасно)
+                uint8_t data = 1;
+                xQueueSendFromISR(gpio_evt_queue, &data, NULL);
             }
             
-            lastStableState = currentState;
-            lastProcessedTime = lastButtonChangeTime;
+            last_button_state = current_button_state;
+            last_interrupt_time = current_time;
         }
-        
-        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
-void app_main(void) {  // Убираем extern "C"
+// Задача для обработки событий из очереди
+static void button_task(void* arg) {
+    uint8_t data;
+    while (1) {
+        if (xQueueReceive(gpio_evt_queue, &data, portMAX_DELAY)) {
+            // Безопасно обрабатываем вне прерывания
+            ledState = !ledState;
+            gpio_set_level(LED_PIN, ledState);
+            ESP_LOGI("Button", "LED toggled: %s", ledState ? "ON" : "OFF");
+        }
+    }
+}
+
+void app_main(void) {
+    // Создаем очередь для событий
+    gpio_evt_queue = xQueueCreate(10, sizeof(uint8_t));
+    
+    // Настройка пинов
     gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
     gpio_set_level(LED_PIN, 0);
     
     gpio_set_direction(BUTTON_PIN, GPIO_MODE_INPUT);
     
-    // Прерывание на любом изменении состояния
+    // Включаем подтяжку к питанию (для стабильности)
+    gpio_pullup_en(BUTTON_PIN);
+    gpio_pulldown_dis(BUTTON_PIN);
+    
+    // Настройка прерывания на ЛЮБОЕ изменение
     gpio_set_intr_type(BUTTON_PIN, GPIO_INTR_ANYEDGE);
     gpio_install_isr_service(0);
     gpio_isr_handler_add(BUTTON_PIN, button_isr_handler, NULL);
     
-    ESP_LOGI("Main", "System started with improved button handling");
+    // Создаем задачу для обработки
+    xTaskCreate(button_task, "button_task", 2048, NULL, 5, NULL);
     
-    xTaskCreate(buttonPollTask, "buttonPoll", 4096, NULL, 5, NULL);
+    ESP_LOGI("Main", "System started with improved interrupt handling");
+    ESP_LOGI("Main", "Press the button to toggle LED");
     
-    while (1) {  // true -> 1 для чистого C
+    while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
