@@ -7,29 +7,23 @@
     {
       "type": "wokwi-pushbutton",
       "id": "btn1",
-      "top": 111.8,
-      "left": 163.2,
+      "top": 246.2,
+      "left": 96,
       "attrs": { "color": "green", "xray": "1" }
     },
     {
       "type": "wokwi-resistor",
       "id": "r1",
-      "top": 71.15,
-      "left": 172.8,
+      "top": 176.75,
+      "left": 124.8,
       "attrs": { "value": "10000" }
     },
-    {
-      "type": "wokwi-led",
-      "id": "led1",
-      "top": -50,
-      "left": 250,
-      "attrs": { "color": "red" }
-    },
+    { "type": "wokwi-led", "id": "led1", "top": 246, "left": 32.6, "attrs": { "color": "red" } },
     {
       "type": "wokwi-resistor",
       "id": "r2",
-      "top": -30,
-      "left": 220,
+      "top": 224.75,
+      "left": -28.8,
       "attrs": { "value": "220" }
     }
   ],
@@ -40,7 +34,7 @@
     [ "esp:GND.1", "btn1:2.l", "black", [ "h0" ] ],
     [ "r1:1", "btn1:1.l", "green", [ "h-9.6", "v48" ] ],
     [ "r1:2", "esp:3V3", "green", [ "v0", "h8.4", "v96" ] ],
-    [ "esp:D2", "r2:1", "blue", [ "v-57.6", "h57.6" ] ],
+    [ "esp:D2", "r2:1", "blue", [ "v-24.8", "h-130.1" ] ],
     [ "r2:2", "led1:A", "blue", [ "h0" ] ],
     [ "led1:C", "esp:GND.2", "black", [ "v28.8", "h-57.6" ] ]
   ],
