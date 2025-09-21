@@ -11,7 +11,7 @@
 #define DEBOUNCE_DELAY_MS 25
 
 static volatile uint32_t lastButtonChangeTime = 0;
-static bool ledState = false;
+static uint8_t ledState = 0;  // Используем uint8_t вместо bool для чистого C
 
 // Простой обработчик прерывания - только запоминаем время изменения
 static void IRAM_ATTR button_isr_handler(void* arg) {
@@ -20,17 +20,19 @@ static void IRAM_ATTR button_isr_handler(void* arg) {
 
 // Задача для опроса состояния кнопки
 static void buttonPollTask(void* args) {
-    bool lastStableState = !BUTTON_PRESSED;
+    uint8_t lastStableState = !BUTTON_PRESSED;  // uint8_t вместо bool
     uint32_t lastProcessedTime = 0;
+    uint32_t currentTime = 0;
+    uint8_t currentState = 0;
     
-    while (true) {
-        uint32_t currentTime = xTaskGetTickCount();
+    while (1) {  // true -> 1 для чистого C
+        currentTime = xTaskGetTickCount();
         
         // Если было изменение состояния и прошло достаточно времени
         if (lastButtonChangeTime > lastProcessedTime && 
             (currentTime - lastButtonChangeTime) > pdMS_TO_TICKS(DEBOUNCE_DELAY_MS)) {
             
-            bool currentState = gpio_get_level(BUTTON_PIN);
+            currentState = gpio_get_level(BUTTON_PIN);
             
             // Обрабатываем только нажатие (переход от отжатого к нажатому)
             if (currentState == BUTTON_PRESSED && lastStableState != BUTTON_PRESSED) {
@@ -47,7 +49,7 @@ static void buttonPollTask(void* args) {
     }
 }
 
-extern "C" void app_main(void) {
+void app_main(void) {  // Убираем extern "C"
     gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
     gpio_set_level(LED_PIN, 0);
     
@@ -62,7 +64,7 @@ extern "C" void app_main(void) {
     
     xTaskCreate(buttonPollTask, "buttonPoll", 4096, NULL, 5, NULL);
     
-    while (true) {
+    while (1) {  // true -> 1 для чистого C
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
